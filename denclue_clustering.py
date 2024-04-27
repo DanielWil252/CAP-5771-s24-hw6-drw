@@ -81,6 +81,28 @@ def denclue(
             SSE += np.sum((cluster_data - cluster_center) ** 2)
 
     return computed_labels, SSE, None  # ARI is not computed, so return None
+def load_data():
+    # Load the data and labels from the .npy files
+    data = np.load('cluster_data.npy')
+    labels = np.load('cluster_labels.npy')
+    return data, labels
+
+def plot_data(data):
+    plt.scatter(data[:, 0], data[:, 1], s=1)
+    plt.xlabel('Dimension 1')
+    plt.ylabel('Dimension 2')
+    plt.title('Original Data Scatterplot')
+    plt.grid(True)
+    plt.show()
+
+def hyperparameter_study(data, sigmas, xis):
+    results = []
+    for sigma in sigmas:
+        for xi in xis:
+            computed_labels, SSE, _ = denclue(data, sigma, xi)
+            # ARI would be computed here if labels were provided
+            results.append({'sigma': sigma, 'xi': xi, 'SSE': SSE})
+    return results
 
 def denclue_clustering():
     """
@@ -96,6 +118,8 @@ def denclue_clustering():
     # Return your `denclue` function
     answers["denclue_function"] = denclue
 
+    data, labels = load_data()
+    plot_data(data[0:10000])
     plot_cluster = plt.scatter([1,2,3], [4,5,6])
     answers["plot_original_cluster"] = plot_cluster
 
