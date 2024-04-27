@@ -12,7 +12,6 @@ import pickle
 #####     CHECK THE PARAMETERS     ########
 ######################################################################
 
-
 def denclue(
     data: NDArray[np.floating], labels: NDArray[np.int32], params_dict: dict
 ) -> tuple[NDArray[np.int32] | None, float | None, float | None]:
@@ -29,12 +28,59 @@ def denclue(
 
     Return value:
     """
+    sigma = params_dict.get('sigma')
+    xi = params_dict.get('xi')
+    
+    if sigma is None or xi is None:
+        return None, None, None
 
-    computed_labels: NDArray[np.int32] | None = None
-    SSE: float | None = None
-    ARI: float | None = None
+    def gaussian_kernel(distance, sigma):
+        return np.exp(-0.5 * (distance ** 2) / (sigma ** 2))
 
-    return computed_labels, SSE, ARI
+    def density_gradient(x, X, sigma):
+        differences = X - x
+        distances = np.linalg.norm(differences, axis=1)
+        weights = gaussian_kernel(distances, sigma)
+        return np.sum(differences * weights[:, np.newaxis], axis=0) / (sigma ** 2)
+
+    def find_local_maxima(x, X, sigma, xi, max_iters=100, tol=1e-5):
+        for _ in range(max_iters):
+            grad = density_gradient(x, X, sigma)
+            x_new = x + xi * grad
+            if np.linalg.norm(x_new - x) < tol:
+                break
+            x = x_new
+        return x
+
+    n_points = data.shape[0]
+    cluster_centers = []
+    visited = np.zeros(n_points, dtype=bool)
+    computed_labels = -np.ones(n_points, dtype=np.int32)
+
+    # Find local maxima and identify clusters
+    for i in range(n_points):
+        if not visited[i]:
+            visited[i] = True
+            local_max = find_local_maxima(data[i], data, sigma, xi)
+            is_unique = True
+            for center in cluster_centers:
+                if np.linalg.norm(local_max - center) < xi:
+                    is_unique = False
+                    computed_labels[i] = cluster_centers.index(center)
+                    break
+            if is_unique:
+                cluster_centers.append(local_max)
+                computed_labels[i] = len(cluster_centers) - 1
+
+    # Compute SSE for clusters
+    SSE = 0.0
+    if len(cluster_centers) > 0:
+        for k in range(len(cluster_centers)):
+            cluster_data = data[computed_labels == k]
+            cluster_center = cluster_centers[k]
+            SSE += np.sum((cluster_data - cluster_center) ** 2)
+
+    return computed_labels, SSE, None  # ARI is not computed, so return None
 
 def denclue_clustering():
     """
