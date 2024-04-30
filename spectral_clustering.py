@@ -12,6 +12,10 @@ from scipy.sparse.linalg import eigs
 from scipy.cluster.vq import kmeans2
 from scipy.linalg import eigh
 from scipy.special import comb
+from scipy.sparse import csgraph
+from scipy.sparse.linalg import eigsh
+from scipy.spatial.distance import pdist, squareform
+from scipy.cluster.vq import kmeans2
 import pickle
 #from sklearn.cluster import KMeans
 ######################################################################
@@ -44,6 +48,13 @@ def adjusted_rand_index(labels_true, labels_pred):
     ari = (comb_within_clusters - expected_index) / (max_index - expected_index)
 
     return ari 
+# SSE calculation
+def sse(data, labels):
+    if len(data) != len(labels):
+        raise ValueError("The length of data and predictions must be the same.")
+    sse = sum((d - p) ** 2 for d, p in zip(data, labels))
+    return sse
+
 
 def spectral(
     data: NDArray[np.floating], labels: NDArray[np.int32], params_dict: dict
@@ -69,58 +80,30 @@ def spectral(
     sigma = params_dict['sigma']
     k = params_dict['k']
 
-    # Compute the affinity matrix
-    def compute_affinity_matrix(data, sigma):
-        n = data.shape[0]
-        affinity_matrix = np.zeros((n, n))
-        for i in range(n):
-            for j in range(i + 1, n):
-                sq_norm = np.linalg.norm(data[i] - data[j])**2
-                affinity_matrix[i, j] = affinity_matrix[j, i] = np.exp(-sq_norm / (2 * sigma**2))
-        return affinity_matrix
+    # Step 1: Create a sparsified similarity graph G
 
-    # Compute the Laplacian matrix
-    def compute_laplacian_matrix(affinity):
-        diagonal = np.sum(affinity, axis=1)
-        laplacian = np.diag(diagonal) - affinity
-        return laplacian
+    # Compute the RBF (Gaussian) kernel similarity
+    pairwise_sq_dists = squareform(pdist(data, 'sqeuclidean'))
 
-    # Compute the first k eigenvectors
-    def compute_first_k_eigenvectors(laplacian, k):
-        eigenvalues, eigenvectors = eigh(laplacian)
-        indices = np.argsort(eigenvalues)[:k]
-        return eigenvectors[:, indices], eigenvalues[indices]
+    affinity_matrix = np.exp(-pairwise_sq_dists / (sigma ** 2))
 
-    # K-means clustering on reduced data
-    def kmeans(data, k):
-        from sklearn.cluster import KMeans
-        kmeans = KMeans(n_clusters=k)
-        kmeans.fit(data)
-        return kmeans.labels_
+    # Step 2: Compute the graph Laplacian for G, L
+    laplacian = csgraph.laplacian(affinity_matrix, normed=False)
+    
+    # Step 3: Create a matrix V from the first k eigenvectors of L
+    # Since we want the smallest eigenvalues, we use 'SM' which stands for 'smallest magnitude'
+    eigenvalues, eigenvectors = eigsh(laplacian, k=k, which='SM')
 
-    # Compute the affinity matrix
-    affinity_matrix = compute_affinity_matrix(data, sigma)
+    # Step 4: Apply K-means clustering on V to obtain the k clusters
+    # Use the real part of eigenvectors in case they are complex numbers
+    v_matrix = eigenvectors.real
 
-    # Compute the Laplacian matrix
-    laplacian_matrix = compute_laplacian_matrix(affinity_matrix)
+    centroids, computed_labels = kmeans2(v_matrix, 5, minit='random')
 
-    # Compute the first k eigenvectors
-    reduced_data, eigenvalues = compute_first_k_eigenvectors(laplacian_matrix, k)
+    SSE = sum(np.sum((data[labels == l] - np.mean(data[labels == l], axis=0)) ** 2) for l in np.unique(labels))
 
-    # Cluster using k-means
-    computed_labels = kmeans(reduced_data, k)
-
-    # SSE calculation
-    def sse(data, labels):
-        if len(data) != len(labels):
-            raise ValueError("The length of data and predictions must be the same.")
-        sse = sum((d - p) ** 2 for d, p in zip(data, labels))
-        return sse
- 
-
-
-    SSE = sse(data, computed_labels)
-    ARI = adjusted_rand_index(labels, computed_labels) 
+    #ARI = adjusted_rand_index(labels, computed_labels) 
+    ARI = adjusted_rand_index(labels,computed_labels)
     return computed_labels, SSE, ARI, eigenvalues    
 
 
@@ -135,7 +118,7 @@ def spectral_clustering():
     answers = {}
     data = np.load('question1_cluster_data.npy')
     labels_true = np.load('question1_cluster_labels.npy')    
-
+ 
     # Return your `spectral` function
     answers["spectral_function"] = spectral
 
@@ -147,17 +130,20 @@ def spectral_clustering():
 
     # Create a dictionary for each parameter pair ('sigma' and 'xi').
     groups = {}
-    print("Shape of data being passed:", data.shape)
-
+    print("Shape of data being passed:", data[:5000].shape)
+    
     for i, (sigma, xi) in enumerate(parameter_pairs):
         print("This ran")
-        # Conduct spectral clustering on the first 10,000 data points
-        labels, SSE, ARI, eigenvalues = spectral(data[:1000], labels_true[:1000], {'sigma': sigma, 'k': 5})
+        print(f"i = {i}")
+        # Conduct spectral clustering on the first 5,000 data points
+        labels, SSE, ARI, eigenvalues = spectral(data[1000*i:1000*(i+1)], labels_true[1000*i:1000*(i+1)], {'sigma': sigma, 'k': 5})
         # Store results
-        groups[i] = {"sigma": sigma, "xi": xi, "ARI": ARI, "SSE": SSE}
+        groups[i] = {"sigma": sigma,"xi": xi,"ARI": ARI, "SSE": SSE} #removed xi
         if i == 0:
             # Save the eigenvalues for plotting
             answers["eigenvalues"] = eigenvalues    
+        if i == 4:
+            break
     # For the spectral method, perform your calculations with 5 clusters.
     # In this cas,e there is only a single parameter, σ.
 
@@ -180,10 +166,9 @@ def spectral_clustering():
     xis = [group["xi"] for group in groups.values()]
     SSEs = [group["SSE"] for group in groups.values()]
     ARIs = [group["ARI"] for group in groups.values()]
-    print(len(sigmas), len(xis), len(SSEs))  # This should output: 10 10 10 if there are 10 groups
     plt.figure()
     #plt.scatter(sigmas, xis, c=SSEs)
-    plot_SSE = plt.scatter(sigmas,xis)
+    plot_SSE = plt.scatter(sigmas,xis,c=SSEs)
     plt.colorbar(label='SSE')
     plt.xlabel('Sigma')
     plt.ylabel('Xi')
@@ -235,6 +220,7 @@ def spectral_clustering():
     # parameters to datasets 1, 2, 3, and 4. Compute the ARI for each dataset.
     # Calculate mean and standard deviation of ARI for all five datasets.
     # Apply the best parameters to the rest of the data
+    print(best_params[1])
     ARIs = [best_params[1]['ARI']]  # include ARI from the initial run
     for i in range(1, 5):
         _, _, ARI, _ = spectral(data[i * 1000:(i + 1) * 1000], labels_true[i * 1000:(i + 1) * 1000], {'sigma': best_params[1]['sigma'], 'k': 5})
