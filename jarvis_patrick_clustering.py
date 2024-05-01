@@ -213,7 +213,7 @@ def jarvis_patrick_clustering():
     plt.tight_layout()
     plt.savefig("JV_clustering_ARI.png")
     # plt.show()    
-    print(f"ARIs: {ARIs}")
+    # print(f"ARIs: {ARIs}")
 
     answers["cluster scatterplot with largest ARI"] = plot_ARI
     answers["cluster scatterplot with smallest SSE"] = plot_SSE
