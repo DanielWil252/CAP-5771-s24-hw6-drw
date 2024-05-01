@@ -200,7 +200,7 @@ def jarvis_patrick_clustering():
     plt.title('Scatter Plot Colored by SSE')
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("JV_clustering_SSE.png")
+    # plt.savefig("JV_clustering_SSE.png")
     # plt.show()
     # print(f"SSEs: {SSEs}")
     plt.figure()
@@ -211,7 +211,7 @@ def jarvis_patrick_clustering():
     plt.title('Scatter Plot Colored by ARI')
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("JV_clustering_ARI.png")
+    # plt.savefig("JV_clustering_ARI.png")
     # plt.show()    
     # print(f"ARIs: {ARIs}")
 

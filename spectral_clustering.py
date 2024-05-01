@@ -211,7 +211,7 @@ def spectral_clustering():
     plt.title('Scatter Plot Colored by SSE')
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("spectral_clustering_SSE.png")
+    # plt.savefig("spectral_clustering_SSE.png")
     # plt.show()
     
     plt.figure()
@@ -222,7 +222,7 @@ def spectral_clustering():
     plt.title('Scatter Plot Colored by ARI')
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("spectral_clustering_ARI.png")
+    # plt.savefig("spectral_clustering_ARI.png")
     # plt.show()    
     # Identify the cluster with the lowest value of ARI. This implies
     # that you set the cluster number to 5 when applying the spectral
@@ -253,7 +253,7 @@ def spectral_clustering():
     plt.ylabel('Eigenvalue')
     plt.title('Eigenvalues from Smallest to Largest')
     plt.grid(True)
-    plt.savefig("spectral_clustering_eigenvalues.png")
+    # plt.savefig("spectral_clustering_eigenvalues.png")
     # plt.show()
     answers["eigenvalue plot"] = plot_eig
 

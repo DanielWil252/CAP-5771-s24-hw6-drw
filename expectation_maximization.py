@@ -382,7 +382,7 @@ def gaussian_mixture():
     plt.ylabel("Log Likelihood")
     plt.grid(True)
     answers["plot_log_likelihood"] = plot_likelihood
-    plt.savefig("plot_log_likelihood.pdf")
+    # plt.savefig("plot_log_likelihood.pdf")
 
     # --------------------------------------------------------------
     # 10 trials of 10,000 points each
