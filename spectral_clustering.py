@@ -8,9 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.sparse import csgraph
 from scipy.spatial.distance import pdist, squareform
-from scipy.sparse.linalg import eigs
 from scipy.cluster.vq import kmeans2
-from scipy.linalg import eigh
 from scipy.special import comb
 from scipy.sparse import csgraph
 from scipy.sparse.linalg import eigsh
@@ -22,32 +20,71 @@ import pickle
 #####     CHECK THE PARAMETERS     ########
 ######################################################################
 
-def adjusted_rand_index(labels_true, labels_pred):
-   # Create a contingency table from labels
-    contingency = np.histogram2d(labels_true, labels_pred, bins=(np.unique(labels_true).size, np.unique(labels_pred).size))[0]
+def adjusted_rand_index(labels_true, labels_pred) -> float:
+    """
+    Compute the adjusted Rand index.
 
-    # Sum over rows & columns
-    sum_rows = np.sum(contingency, axis=1)
-    sum_cols = np.sum(contingency, axis=0)
+    Parameters:
+    - labels_true: The true labels of the data points.
+    - labels_pred: The predicted labels of the data points.
 
-    # Total combinations of pairs
-    total_combinations = comb(contingency.sum(), 2)
+    Returns:
+    - ari: The adjusted Rand index value.
 
-    # Combinations within the same clusters
-    comb_within_clusters = np.sum([comb(n, 2) for n in contingency.flatten()])
-    comb_same_cluster_true = np.sum([comb(n, 2) for n in sum_rows])
-    comb_same_cluster_pred = np.sum([comb(n, 2) for n in sum_cols])
+    The adjusted Rand index is a measure of the similarity between two data clusterings.
+    It takes into account both the similarity of the clusters themselves and the similarity
+    of the data points within each cluster. The adjusted Rand index ranges from -1 to 1,
+    where a value of 1 indicates perfect agreement between the two clusterings, 0 indicates
+    random agreement, and -1 indicates complete disagreement.
+    """
+    # Create contingency table
+    contingency_table = np.histogram2d(
+        labels_true,
+        labels_pred,
+        bins=(np.unique(labels_true).size, np.unique(labels_pred).size),
+    )[0]
 
-    # Expected index
-    expected_index = (comb_same_cluster_true * comb_same_cluster_pred) / total_combinations
+    # Sum over rows and columns
+    sum_combinations_rows = np.sum(
+        [np.sum(nj) * (np.sum(nj) - 1) / 2 for nj in contingency_table]
+    )
+    sum_combinations_cols = np.sum(
+        [np.sum(ni) * (np.sum(ni) - 1) / 2 for ni in contingency_table.T]
+    )
 
-    # Max index
-    max_index = (comb_same_cluster_true + comb_same_cluster_pred) / 2
+    # Sum of combinations for all elements
+    N = np.sum(contingency_table)
+    sum_combinations_total = N * (N - 1) / 2
 
-    # Adjusted Rand Index
-    ari = (comb_within_clusters - expected_index) / (max_index - expected_index)
+    # Calculate ARI
+    ari = (
+        np.sum([np.sum(n_ij) * (np.sum(n_ij) - 1) / 2 for n_ij in contingency_table])
+        - (sum_combinations_rows * sum_combinations_cols) / sum_combinations_total
+    ) / (
+        (sum_combinations_rows + sum_combinations_cols) / 2
+        - (sum_combinations_rows * sum_combinations_cols) / sum_combinations_total
+    )
 
-    return ari 
+    return ari
+
+def compute_SSE(data, labels):
+    """
+    Calculate the sum of squared errors (SSE) for a clustering.
+
+    Parameters:
+    - data: numpy array of shape (n, 2) containing the data points
+    - labels: numpy array of shape (n,) containing the cluster assignments
+
+    Returns:
+    - sse: the sum of squared errors
+    """
+    # ADD STUDENT CODE
+    sse = 0.0
+    for i in np.unique(labels):
+        cluster_points = data[labels == i]
+        cluster_center = np.mean(cluster_points, axis=0)
+        sse += np.sum((cluster_points - cluster_center) ** 2)
+    return sse
 # SSE calculation
 def sse(data, labels):
     if len(data) != len(labels):
@@ -100,8 +137,8 @@ def spectral(
 
     centroids, computed_labels = kmeans2(v_matrix, 5, minit='random')
 
-    SSE = sum(np.sum((data[labels == l] - np.mean(data[labels == l], axis=0)) ** 2) for l in np.unique(labels))
-
+    # SSE = sum(np.sum((data[labels == l] - np.mean(data[labels == l], axis=0)) ** 2) for l in np.unique(labels))
+    SSE = compute_SSE(data,labels)
     #ARI = adjusted_rand_index(labels, computed_labels) 
     ARI = adjusted_rand_index(labels,computed_labels)
     return computed_labels, SSE, ARI, eigenvalues    
@@ -123,18 +160,18 @@ def spectral_clustering():
     answers["spectral_function"] = spectral
 
     parameter_pairs = [(sigma, xi) for sigma in np.linspace(0.1, 2, 5) for xi in np.linspace(0.1, 2, 2)]
-    print(parameter_pairs)
+    # print(parameter_pairs)
     # Work with the first 10,000 data points: data[0:10000]
     # Do a parameter study of this data using Spectral clustering.
     # Minimmum of 10 pairs of parameters ('sigma' and 'xi').
 
     # Create a dictionary for each parameter pair ('sigma' and 'xi').
     groups = {}
-    print("Shape of data being passed:", data[:5000].shape)
+    # print("Shape of data being passed:", data[:5000].shape) 
     
     for i, (sigma, xi) in enumerate(parameter_pairs):
-        print("This ran")
-        print(f"i = {i}")
+        # print("This ran")
+        # print(f"i = {i}")
         # Conduct spectral clustering on the first 5,000 data points
         labels, SSE, ARI, eigenvalues = spectral(data[1000*i:1000*(i+1)], labels_true[1000*i:1000*(i+1)], {'sigma': sigma, 'k': 5})
         # Store results
@@ -142,8 +179,8 @@ def spectral_clustering():
         if i == 0:
             # Save the eigenvalues for plotting
             answers["eigenvalues"] = eigenvalues    
-        if i == 4:
-            break
+        #if i == 4:
+        #    break
     # For the spectral method, perform your calculations with 5 clusters.
     # In this cas,e there is only a single parameter, σ.
 
@@ -163,27 +200,30 @@ def spectral_clustering():
 
     # Plot SSE and ARI scatter plots
     sigmas = [group["sigma"] for group in groups.values()]
-    xis = [group["xi"] for group in groups.values()]
+    # xis = [group["xi"] for group in groups.values()]
     SSEs = [group["SSE"] for group in groups.values()]
     ARIs = [group["ARI"] for group in groups.values()]
     plt.figure()
-    #plt.scatter(sigmas, xis, c=SSEs)
-    plot_SSE = plt.scatter(sigmas,xis,c=SSEs)
+    plot_SSE = plt.scatter(sigmas,SSEs,c=SSEs)
     plt.colorbar(label='SSE')
     plt.xlabel('Sigma')
-    plt.ylabel('Xi')
+    plt.ylabel('SSE')
     plt.title('Scatter Plot Colored by SSE')
     plt.grid(True)
-    plt.show()
+    plt.tight_layout()
+    plt.savefig("spectral_clustering_SSE.png")
+    # plt.show()
     
     plt.figure()
-    plot_ARI = plt.scatter(sigmas, xis, c=ARIs)
+    plot_ARI = plt.scatter(sigmas, ARIs, c=ARIs)
     plt.colorbar(label='ARI')
     plt.xlabel('Sigma')
-    plt.ylabel('Xi')
+    plt.ylabel('ARI')
     plt.title('Scatter Plot Colored by ARI')
     plt.grid(True)
-    plt.show()    
+    plt.tight_layout()
+    plt.savefig("spectral_clustering_ARI.png")
+    # plt.show()    
     # Identify the cluster with the lowest value of ARI. This implies
     # that you set the cluster number to 5 when applying the spectral
     # algorithm.
@@ -213,15 +253,17 @@ def spectral_clustering():
     plt.ylabel('Eigenvalue')
     plt.title('Eigenvalues from Smallest to Largest')
     plt.grid(True)
-    plt.show()
+    plt.savefig("spectral_clustering_eigenvalues.png")
+    # plt.show()
     answers["eigenvalue plot"] = plot_eig
 
     # Pick the parameters that give the largest value of ARI, and apply these
     # parameters to datasets 1, 2, 3, and 4. Compute the ARI for each dataset.
     # Calculate mean and standard deviation of ARI for all five datasets.
     # Apply the best parameters to the rest of the data
-    print(best_params[1])
+    # print(best_params[1])
     ARIs = [best_params[1]['ARI']]  # include ARI from the initial run
+    # print(ARIs)
     for i in range(1, 5):
         _, _, ARI, _ = spectral(data[i * 1000:(i + 1) * 1000], labels_true[i * 1000:(i + 1) * 1000], {'sigma': best_params[1]['sigma'], 'k': 5})
         ARIs.append(ARI)
@@ -231,8 +273,8 @@ def spectral_clustering():
     answers["std_ARIs"] = np.std(ARIs)
     answers["mean_SSEs"] = np.mean(SSEs)
     answers["std_SSEs"] = np.std(SSEs)
-    print(np.mean(ARIs))
-    print(np.std(ARIs))
+    # print(np.mean(ARIs))
+    # print(np.std(ARIs))
     return answers
 
 

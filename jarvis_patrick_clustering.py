@@ -13,91 +13,119 @@ import pickle
 #####     CHECK THE PARAMETERS     ########
 ######################################################################
 
-def adjusted_rand_index(labels_true, labels_pred):
-   # Create a contingency table from labels
-    contingency = np.histogram2d(labels_true, labels_pred, bins=(np.unique(labels_true).size, np.unique(labels_pred).size))[0]
+def adjusted_rand_index(labels_true, labels_pred) -> float:
+    """
+    Compute the adjusted Rand index.
 
-    # Sum over rows & columns
-    sum_rows = np.sum(contingency, axis=1)
-    sum_cols = np.sum(contingency, axis=0)
+    Parameters:
+    - labels_true: The true labels of the data points.
+    - labels_pred: The predicted labels of the data points.
 
-    # Total combinations of pairs
-    total_combinations = comb(contingency.sum(), 2)
+    Returns:
+    - ari: The adjusted Rand index value.
+    """
+    # Create contingency table
+    contingency_table = np.histogram2d(
+        labels_true, labels_pred, 
+        bins=(np.unique(labels_true).size, np.unique(labels_pred).size)
+    )[0]
 
-    # Combinations within the same clusters
-    comb_within_clusters = np.sum([comb(n, 2) for n in contingency.flatten()])
-    comb_same_cluster_true = np.sum([comb(n, 2) for n in sum_rows])
-    comb_same_cluster_pred = np.sum([comb(n, 2) for n in sum_cols])
+    # Sum over rows and columns
+    sum_combinations_rows = np.sum([np.sum(row) * (np.sum(row) - 1) / 2 for row in contingency_table])
+    sum_combinations_cols = np.sum([np.sum(col) * (np.sum(col) - 1) / 2 for col in contingency_table.T])
 
-    # Expected index
-    expected_index = (comb_same_cluster_true * comb_same_cluster_pred) / total_combinations
+    # Sum of combinations for all elements
+    N = np.sum(contingency_table)
+    sum_combinations_total = N * (N - 1) / 2
 
-    # Max index
-    max_index = (comb_same_cluster_true + comb_same_cluster_pred) / 2
+    # Calculate ARI
+    sum_combinations_within = np.sum([n * (n - 1) / 2 for n in contingency_table.flatten()])
 
-    # Adjusted Rand Index
-    ari = (comb_within_clusters - expected_index) / (max_index - expected_index)
+    ari = (
+        sum_combinations_within - (sum_combinations_rows * sum_combinations_cols) / sum_combinations_total
+    ) / (
+        (sum_combinations_rows + sum_combinations_cols) / 2
+        - (sum_combinations_rows * sum_combinations_cols) / sum_combinations_total
+    )
+    return ari
+def compute_SSE(data, labels):
+    """
+    Calculate the sum of squared errors (SSE) for a clustering.
 
-    return ari 
+    Parameters:
+    - data: numpy array of shape (n, 2) containing the data points
+    - labels: numpy array of shape (n,) containing the cluster assignments
+
+    Returns:
+    - sse: the sum of squared errors
+    """
+    # ADD STUDENT CODE
+    sse = 0.0
+    for i in np.unique(labels):
+        cluster_points = data[labels == i]
+        cluster_center = np.mean(cluster_points, axis=0)
+        sse += np.sum((cluster_points - cluster_center) ** 2)
+    return sse
+# SSE calculation
+def sse(data, labels):
+    if len(data) != len(labels):
+        raise ValueError("The length of data and predictions must be the same.")
+    sse = sum((d - p) ** 2 for d, p in zip(data, labels))
+    return sse
+
 def jarvis_patrick(
-    data: NDArray[np.floating], labels: NDArray[np.int32], params_dict: dict
+    data: NDArray[np.float64], labels: NDArray[np.int32], params_dict: dict
 ) -> tuple[NDArray[np.int32] | None, float | None, float | None]:
     """
     Implementation of the Jarvis-Patrick algorithm only using the `numpy` module.
 
     Arguments:
     - data: a set of points of shape 50,000 x 2.
-    - dict: dictionary of parameters. The following two parameters must
-       be present: 'k', 'smin', There could be others.
-    - params_dict['k']: the number of nearest neighbors to consider. This determines the size of the neighborhood used to assess the similarity between datapoints. Choose values in the range 3 to 8
-    - params_dict['smin']:  the minimum number of shared neighbors to consider two points in the same cluster.
-       Choose values in the range 4 to 10.
+    - labels: true labels of the dataset for ARI calculation.
+    - params_dict: dictionary of parameters. Must include 'k' and 'smin'.
+    - params_dict['k']: the number of nearest neighbors to consider.
+    - params_dict['smin']: the minimum number of shared neighbors for clustering.
 
     Return values:
     - computed_labels: computed cluster labels
-    - SSE: float, sum of squared errors
-    - ARI: float, adjusted Rand index
-
-    Notes:
-    - the nearest neighbors can be bidirectional or unidirectional
-    - Bidirectional: if point A is a nearest neighbor of point B, then point B is a nearest neighbor of point A).
-    - Unidirectional: if point A is a nearest neighbor of point B, then point B is not necessarily a nearest neighbor of point A).
-    - In this project, only consider unidirectional nearest neighboars for simplicity.
-    - The metric  used to compute the the k-nearest neighberhood of all points is the Euclidean metric
+    - SSE: sum of squared errors
+    - ARI: adjusted Rand index
     """
+
     k = params_dict['k']
     smin = params_dict['smin']
- # Step 1: Compute the pairwise Euclidean distances
-    distances = cdist(data, data, 'euclidean')
     
-    # Step 2: Find k-nearest neighbors (indices) for each point
-    knn_indices = np.argsort(distances, axis=1)[:, 1:k+1]
+    # Calculate pairwise Euclidean distance
+    dist_matrix = np.sqrt(((data[:, np.newaxis, :] - data[np.newaxis, :, :]) ** 2).sum(axis=2))
+
+    # Get indices of k nearest neighbors for each point
+    neighbors = np.argsort(dist_matrix, axis=1)[:, 1:k+1]
+
+    # Initialize cluster labels
+    cluster_labels = -np.ones(data.shape[0], dtype=np.int32)
+    current_cluster = 0
     
-    # Step 3: Determine shared neighbors and assign points to clusters
-    n_points = data.shape[0]
-    clusters = np.full(n_points, -1)
-    cluster_id = 0
-    for i in range(n_points):
-        # Find the points that have at least 'smin' shared neighbors with point 'i'
-        shared_neighbors = np.sum(np.isin(knn_indices, knn_indices[i]), axis=1) >= smin
-        # Assign the points to the same cluster as point 'i' if they are not already assigned
-        for j in np.where(shared_neighbors & (clusters == -1))[0]:
-            clusters[j] = cluster_id
-        # If point 'i' is not assigned, assign it to a new cluster
-        if clusters[i] == -1:
-            clusters[i] = cluster_id
-            cluster_id += 1
-    
-    # Compute labels
-    computed_labels = clusters
+    for i in range(data.shape[0]):
+        if cluster_labels[i] == -1:  # If point i is not yet labeled
+            # Start a new cluster with point i
+            cluster_labels[i] = current_cluster
+            
+            # Find all points with enough shared neighbors with point i
+            for j in range(data.shape[0]):
+                if i != j and cluster_labels[j] == -1:
+                    shared_neighbors = np.intersect1d(neighbors[i], neighbors[j], assume_unique=True)
+                    if len(shared_neighbors) >= smin:
+                        cluster_labels[j] = current_cluster
+            
+            current_cluster += 1
 
-    SSE = sum(np.sum((data[labels == l] - np.mean(data[labels == l], axis=0)) ** 2) for l in np.unique(labels))
+    # Compute SSE
+    # sse = sum(np.sum((data[labels == l] - np.mean(data[labels == l], axis=0)) ** 2) for l in np.unique(labels)) 
+    sse = compute_SSE(data,labels)
+    # Compute ARI
+    ari = adjusted_rand_index(labels, cluster_labels)
 
-    ARI = adjusted_rand_index(labels,computed_labels)
-
-
-
-    return computed_labels, SSE, ARI
+    return cluster_labels, sse, ari
 
 
 def jarvis_patrick_clustering():
@@ -117,20 +145,20 @@ def jarvis_patrick_clustering():
     # Work with the first 10,000 data points: data[0:10000]
     # Do a parameter study of this data using Jarvis-Patrick.
     # Minimmum of 10 pairs of parameters ('sigma' and 'xi').
-    parameter_pairs = [(sigma, xi) for sigma in np.linspace(0.1, 2, 5) for xi in np.linspace(0.1, 2, 2)]
+    parameter_pairs = [(k, smin) for k in [3,4,5,6,7] for smin in [4,6,8,10]]
+    # print(parameter_pairs)
     # Create a dictionary for each parameter pair ('sigma' and 'xi').
     groups = {}
-    print("Shape of data being passed:", data[:5000].shape)
+    # print("Shape of data being passed:", data[:5000].shape)
     
-    for i, (sigma, xi) in enumerate(parameter_pairs):
-        print("This ran")
-        print(f"i = {i}")
+    for i, (k, smin) in enumerate(parameter_pairs):
+        # print(f"i = {i}")
         # Conduct spectral clustering on the first 5,000 data points
-        labels, SSE, ARI = jarvis_patrick(data[1000*i:1000*(i+1)], labels_true[1000*i:1000*(i+1)], {'sigma': sigma,'k': 5, 'smin': 5})
+        labels, SSE, ARI = jarvis_patrick(data[1000*i:1000*(i+1)], labels_true[1000*i:1000*(i+1)], {'k': k, 'smin': smin})
         # Store results
-        groups[i] = {"sigma": sigma,"xi": xi,"ARI": ARI, "SSE": SSE} #removed xi
-        if i == 4:
-            break
+        groups[i] = {"k": k,"ARI": ARI, "SSE": SSE,"smin": smin} #removed xi
+        #if i == 4:
+        #    break
     # data for data group 0: data[0:10000]. For example,
     # groups[0] = {"sigma": 0.1, "xi": 0.1, "ARI": 0.1, "SSE": 0.1}
 
@@ -144,6 +172,7 @@ def jarvis_patrick_clustering():
 
     # Identify the best and worst parameters based on ARI
     best_params = max(groups.items(), key=lambda x: x[1]['ARI'])
+    # print(best_params)
     worst_params = min(groups.items(), key=lambda x: x[1]['ARI'])
     # Create two scatter plots using `matplotlib.pyplot`` where the two
     # axes are the parameters used, with # \sigma on the horizontal axis
@@ -157,29 +186,34 @@ def jarvis_patrick_clustering():
     # Plot is the return value of a call to plt.scatter()
 
     # Plot SSE and ARI scatter plots
-    sigmas = [group["sigma"] for group in groups.values()]
-    xis = [group["xi"] for group in groups.values()]
+    smins = [group["smin"] for group in groups.values()]
+    ks = [group["k"] for group in groups.values()]
+    # xis = [group["xi"] for group in groups.values()]
     SSEs = [group["SSE"] for group in groups.values()]
     ARIs = [group["ARI"] for group in groups.values()]
     plt.figure()
     #plt.scatter(sigmas, xis, c=SSEs)
-    plot_SSE = plt.scatter(sigmas,xis,c=SSEs)
+    plot_SSE = plt.scatter(ks,smins,c=SSEs)
     plt.colorbar(label='SSE')
-    plt.xlabel('Sigma')
-    plt.ylabel('Xi')
+    plt.xlabel('K')
+    plt.ylabel('Smin')
     plt.title('Scatter Plot Colored by SSE')
     plt.grid(True)
-    plt.show()
-
+    plt.tight_layout()
+    plt.savefig("JV_clustering_SSE.png")
+    # plt.show()
+    # print(f"SSEs: {SSEs}")
     plt.figure()
-    plot_ARI = plt.scatter(sigmas, xis, c=ARIs)
+    plot_ARI = plt.scatter(ks, smins, c=ARIs)
     plt.colorbar(label='ARI')
-    plt.xlabel('Sigma')
-    plt.ylabel('Xi')
+    plt.xlabel('K')
+    plt.ylabel('Smin')
     plt.title('Scatter Plot Colored by ARI')
     plt.grid(True)
-    plt.show()    
-
+    plt.tight_layout()
+    plt.savefig("JV_clustering_ARI.png")
+    # plt.show()    
+    print(f"ARIs: {ARIs}")
 
     answers["cluster scatterplot with largest ARI"] = plot_ARI
     answers["cluster scatterplot with smallest SSE"] = plot_SSE
@@ -190,7 +224,7 @@ def jarvis_patrick_clustering():
 
     ARIs = [best_params[1]['ARI']]  # include ARI from the initial run
     for i in range(1, 5):
-        _, _, ARI = jarvis_patrick(data[i * 1000:(i + 1) * 1000], labels_true[i * 1000:(i + 1) * 1000], {'sigma': best_params[1]['sigma'], 'k': 5, 'smin': 5})# May have to do best param for k and smin
+        _, _, ARI = jarvis_patrick(data[i * 1000:(i + 1) * 1000], labels_true[i * 1000:(i + 1) * 1000], {'k': best_params[1]["k"], 'smin': best_params[1]["smin"]})# May have to do best param for k and smin
         ARIs.append(ARI)
     
     # Calculate mean and standard deviation for ARI and SSE
@@ -198,8 +232,8 @@ def jarvis_patrick_clustering():
     answers["std_ARIs"] = np.std(ARIs)
     answers["mean_SSEs"] = np.mean(SSEs)
     answers["std_SSEs"] = np.std(SSEs)
-    print(np.mean(ARIs))
-    print(np.std(ARIs)) 
+    # print(np.mean(ARIs))
+    # print(np.std(ARIs)) 
 
     return answers
 

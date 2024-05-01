@@ -2,10 +2,36 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy.typing import NDArray
-from sklearn.metrics import confusion_matrix
 
 # ----------------------------------------------------------------------
 
+def confusion_matrix(label_samples, predicted_labels):
+    """
+    Generate a confusion matrix for classification results using just two parameters.
+    
+    Parameters:
+        label_samples (list or array): True class labels.
+        predicted_labels (list or array): Predicted class labels.
+
+    Returns:
+        np.ndarray: A confusion matrix where rows represent true classes and
+                    columns represent predicted classes.
+    """
+    # Extract the unique labels from the true labels
+    labels = np.unique(label_samples)
+    n_classes = len(labels)
+    conf_matrix = np.zeros((n_classes, n_classes), dtype=int)
+    
+    # Create a mapping from label to index
+    label_to_index = {label: index for index, label in enumerate(labels)}
+    
+    # Fill the confusion matrix
+    for true, pred in zip(label_samples, predicted_labels):
+        true_index = label_to_index[true]
+        pred_index = label_to_index[pred]
+        conf_matrix[true_index, pred_index] += 1
+
+    return conf_matrix
 
 def compute_SSE(data, labels):
     """
@@ -110,7 +136,7 @@ def adjusted_rand_index(labels_true, labels_pred) -> float:
 # Example usage:
 true_labels = np.array([0, 0, 1, 1, 0, 1])
 pred_labels = np.array([1, 1, 0, 0, 1, 0])
-print(adjusted_rand_index(true_labels, pred_labels))
+# print(adjusted_rand_index(true_labels, pred_labels))
 
 # ----------------------------------------------------------------------
 
@@ -281,8 +307,8 @@ def gaussian_mixture():
     data = np.load("question2_cluster_data.npy")
     labels = np.load("question2_cluster_labels.npy")
 
-    print(f"Data shape: {data.shape}")
-    print(f"Labels shape: {labels.shape}")
+    # print(f"Data shape: {data.shape}")
+    # print(f"Labels shape: {labels.shape}")
 
     def sample_estimate(data, labels, nb_samples=10000, max_iter=100):
         # ADD STUDENT CODE
@@ -290,7 +316,7 @@ def gaussian_mixture():
         weights, means, covariances, log_likelihoods, predicted_labels = em_algorithm(
             data_samples, max_iter
         )
-        print("==> means: ", means)
+        # print("==> means: ", means)
         # Compute the confusion matrix
         # The predicted labels are in the correct order: 0 and 1
         # nb_pred_labels_0 = np.sum(predicted_labels == 0)
@@ -324,8 +350,8 @@ def gaussian_mixture():
     # Call the function
     data_samples, label_samples = extract_samples(data, labels, 10000)
 
-    print(f"Data shape: {data_samples.shape}")
-    print(f"Labels shape: {label_samples.shape}")
+    # print(f"Data shape: {data_samples.shape}")
+    # print(f"Labels shape: {label_samples.shape}")
 
     # ADD STUDENT CODE
     plot = plt.scatter(data_samples[:, 0], data_samples[:, 1], c=label_samples, s=0.1)
